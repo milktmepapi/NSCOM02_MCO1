@@ -51,40 +51,23 @@ def receiveOnePing(mySocket, ID, timeout, destAddr):
         recPacket, addr = mySocket.recvfrom(1024)
 
         # Fill in start
-        # Fetch the ICMP header from the IP packet
-        # IP header is the first 20 bytes; ICMP header starts at byte 20
+       # Fetch IP + ICMP header
+        recPacket, addr = mySocket.recvfrom(1024)
+
         ipHeader = recPacket[:20]
-        ip_fields = struct.unpack("!BBHHHBBH4s4s", ipHeader)
-        ttl = ip_fields[5]
-
         icmpHeader = recPacket[20:28]
-        icmpType, icmpCode, icmpChecksum, packetID, sequence = struct.unpack("bbHHh", icmpHeader)
 
-        # Check if this is our echo reply
+        icmpType, icmpCode, icmpChecksum, packetID, sequence = struct.unpack("!BBHHH", icmpHeader)
+
+        # Only accept Echo Reply
         if icmpType == ICMP_ECHO_REPLY and packetID == ID:
-            # Extract the timestamp from the payload (after the 8-byte ICMP header)
             timeSent = struct.unpack("d", recPacket[28:36])[0]
-            rtt = (timeReceived - timeSent) * 1000  # in milliseconds
+
+            rtt = (timeReceived - timeSent) * 1000
+
+            ttl = struct.unpack("!BBHHHBBH4s4s", ipHeader)[5]
+
             return rtt, sequence, ttl
-
-        # Bonus: ICMP Error Parsing
-        elif icmpType == ICMP_DEST_UNREACH:
-            unreach_codes = {
-                0: "Destination Network Unreachable",
-                1: "Destination Host Unreachable",
-                2: "Destination Protocol Unreachable",
-                3: "Destination Port Unreachable",
-                4: "Fragmentation Required",
-                5: "Source Route Failed",
-            }
-            msg = unreach_codes.get(icmpCode, f"Destination Unreachable (code {icmpCode})")
-            return f"ICMP Error: {msg}"
-
-        elif icmpType == ICMP_TIME_EXCEEDED:
-            if icmpCode == 0:
-                return "ICMP Error: TTL Expired in Transit"
-            else:
-                return "ICMP Error: Fragment Reassembly Time Exceeded"
         # Fill in end
 
         timeLeft = timeLeft - howLongInSelect
@@ -121,21 +104,19 @@ def doOnePing(destAddr, timeout):
     icmp = getprotobyname("icmp")
 
     # Fill in start
-    # Create a raw socket for ICMP
+    #create socket
     mySocket = socket(AF_INET, SOCK_RAW, icmp)
-    # Fill in end
 
+    # define ID here (THIS IS WHAT YOU'RE MISSING IN EFFECTIVE FLOW)
     myID = os.getpid() & 0xFFFF
 
-    # Fill in start
-    # Send a single ping using the socket, dst addr and ID
-    packets_sent += 1
+    #send a single ping using the socket, dst addr and ID
     sendOnePing(mySocket, destAddr, myID)
 
-    # Wait for reply using timeout
+    #wait for reply using timeout
     delay = receiveOnePing(mySocket, myID, timeout, destAddr)
 
-    # Close the socket
+    #close socket
     mySocket.close()
     # Fill in end
 
