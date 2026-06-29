@@ -111,6 +111,9 @@ def sendOnePing(mySocket, destAddr, ID):
     packet = header + data
     mySocket.sendto(packet, (destAddr, 1))
 
+    # For testing
+    print("Packet sent")
+
 
 def doOnePing(destAddr, timeout):
     global packets_sent, packets_received
@@ -176,4 +179,4 @@ def ping(host, timeout=2):
         print("")
 
 
-ping("google.com")
+ping("127.0.0.1") # Local host first
