@@ -9,6 +9,32 @@ import binascii
 ICMP_ECHO_REQUEST = 8
 seq = 0 # Added for incrementation
 
+# For bonus; summary statistics
+totalSent = 0
+totalReceived = 0
+rttList = []
+
+# For bonus; error parsin
+ICMP_ERROR_MESSAGES = {
+    3: {
+        0: "Destination Network Unreachable",
+        1: "Destination Host Unreachable",
+        2: "Destination Protocol Unreachable",
+        3: "Destination Port Unreachable",
+        4: "Fragmentation Needed and DF set",
+        5: "Source Route Failed",
+        6: "Destination Network Unknown",
+        7: "Destination Host Unknown",
+        9: "Network Administratively Prohibited",
+        10: "Host Administratively Prohibited",
+        13: "Communication Administratively Prohibited",
+    },
+    11: {
+        0: "TTL Expired in Transit",
+        1: "Fragment Reassembly Time Exceeded",
+    },
+}
+
 def checksum(string):
     csum = 0
     countTo = (len(string) // 2) * 2
@@ -53,6 +79,20 @@ def receiveOnePing(mySocket, ID, timeout, destAddr):
             rtt = (timeReceived - timeSent) * 1000  # convert seconds -> ms
             return sequence, rtt
         #Fill in end
+
+        # Bonus fill in start
+        if icmpType in (3, 11):
+            # Original packet: 20 bytes (inner IP header) + 8 bytes (inner ICMP header)
+            innerIcmpHeader = recPacket[28+20:28+20+8]
+            if len(innerIcmpHeader) == 8:
+                _, _, _, innerID, innerSeq = struct.unpack("bbHHh", innerIcmpHeader)
+                if innerID == ID:
+                    description = ICMP_ERROR_MESSAGES.get(icmpType, {}).get(
+                        code, f"Unknown ICMP Error (Type={icmpType}, Code={code})"
+                    )
+                    return "ICMP_ERROR", icmpType, code, description
+
+        # Bonus fill in end
         
         timeLeft = timeLeft - howLongInSelect
         if timeLeft <= 0:
@@ -87,6 +127,8 @@ def sendOnePing(mySocket, destAddr, ID):
 
 
 def doOnePing(destAddr, timeout):
+    global totalSent, totalReceived, rttList # For bonus
+    
     icmp = getprotobyname("icmp")
     # SOCK_RAW is a powerful socket type. For more details: http://sockraw.org/papers/sock_raw
     
@@ -102,6 +144,8 @@ def doOnePing(destAddr, timeout):
     #send a single ping using the socket, dst addr and ID
     sendOnePing(mySocket, destAddr, myID)
     
+    totalSent += 1  # Bonus; track every request we send
+    
     #add delay using timeout
     result = receiveOnePing(mySocket, myID, timeout, destAddr)
     
@@ -110,15 +154,39 @@ def doOnePing(destAddr, timeout):
 
     if result == "Request timed out.":
         delay = result
+    elif isinstance(result, tuple) and result[0] == "ICMP_ERROR":
+        # Bonus; ICMP error parsing 
+        _, errType, errCode, description = result
+        delay = f"ICMP Error: {description} (Type={errType}, Code={errCode})"
     else:
         sequence, rtt = result
+        totalReceived += 1 # Bonus; count successful replies
+        rttList.append(rtt) # Bonus; collect RTT for summary stats
         delay = f"Sequence={sequence}  RTT={rtt:.2f} ms"
    #Fill in end
 
     return delay
+
+# Bonus method
+def printSummary():
+    # Bonus; RTT summary stats prints min/max/avg RTT and packet loss %
+    print("")
+    print("--- Ping Statistics ---")
+    lossRate = 0.0
+    if totalSent > 0:
+        lossRate = ((totalSent - totalReceived) / totalSent) * 100
+    print(f"Packets: Sent = {totalSent}, Received = {totalReceived}, "
+          f"Lost = {totalSent - totalReceived} ({lossRate:.2f}% loss)")
+ 
+    if rttList:
+        print(f"RTT (ms): Min = {min(rttList):.2f}, "
+              f"Max = {max(rttList):.2f}, "
+              f"Avg = {sum(rttList)/len(rttList):.2f}")
+    else:
+        print("RTT (ms): N/A (no successful replies)")
     
     
-def ping(host, timeout=1):
+def ping(host, timeout=2): # Timeout is 2 = 2000ms per the specs
     # timeout=1 means: If one second goes by without a reply from the server,
     # the client assumes that either the client's ping or the server's pong is lost
     
@@ -127,11 +195,17 @@ def ping(host, timeout=1):
     print("")
     
     # Send ping requests to a server separated by approximately one second
-    while 1 :
-        delay = doOnePing(dest, timeout)
-        print(delay)
-        time.sleep(1)# one second
-    return delay
+    try: 
+        while 1 :
+            delay = doOnePing(dest, timeout)
+            print(delay)
+            time.sleep(1)# one second
+        return delay
+    except KeyboardInterrupt:
+        # Bonus; print RTT summary stats when the user stops the ping (Ctrl+C)
+        printSummary()
 
+    return
+    
 if __name__ == "__main__":
     ping("127.0.0.1")
