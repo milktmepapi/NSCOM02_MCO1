@@ -7,7 +7,7 @@ import select
 import binascii
 
 ICMP_ECHO_REQUEST = 8
-seq = 0 # Added custom
+seq = 0 # Added for incrementation
 
 def checksum(string):
     csum = 0
@@ -63,14 +63,14 @@ def sendOnePing(mySocket, destAddr, ID):
     myChecksum = 0 # Og version
     # Make a dummy header with a 0 checksum
 
-    global seq
+    global seq # Changed seq here
     seq += 1
     
     # struct -- Interpret strings as packed binary data
-    header = struct.pack("bbHHh", ICMP_ECHO_REQUEST, 0, myChecksum, ID, seq)
+    header = struct.pack("bbHHh", ICMP_ECHO_REQUEST, 0, myChecksum, ID, seq) # Changed seq here
     data = struct.pack("d", time.time())
     # Calculate the checksum on the data and the dummy header.
-    myChecksum = checksum((header + data).decode("latin-1"))
+    myChecksum = checksum((header + data).decode("latin-1")) # Added decode here
 
     # Get the right checksum, and put in the header
     if sys.platform == 'darwin':
@@ -79,7 +79,7 @@ def sendOnePing(mySocket, destAddr, ID):
     else:
         myChecksum = htons(myChecksum)
     
-    header = struct.pack("bbHHh", ICMP_ECHO_REQUEST, 0, myChecksum, ID, seq)
+    header = struct.pack("bbHHh", ICMP_ECHO_REQUEST, 0, myChecksum, ID, seq) # Changed seq here
     packet = header + data
     mySocket.sendto(packet, (destAddr, 1)) # AF_INET address must be tuple, not str
     # Both LISTS and TUPLES consist of a number of objects
@@ -95,7 +95,6 @@ def doOnePing(destAddr, timeout):
     mySocket = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP)
 
     #Fill in end
-   
     myID = os.getpid() & 0xFFFF # Return the current process i
 
     #Fill in start
@@ -115,7 +114,6 @@ def doOnePing(destAddr, timeout):
         sequence, rtt = result
         delay = f"Sequence={sequence}  RTT={rtt:.2f} ms"
    #Fill in end
-    
 
     return delay
     
